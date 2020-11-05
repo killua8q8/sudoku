@@ -1,0 +1,75 @@
+body {
+  margin: 0;
+  background: #333;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.root {
+  height: 100vh;
+  display: grid;
+  justify-items: center;
+  align-items: center;
+}
+.grid {
+  outline: none;
+  border: 3px solid #484848;
+  display: grid;
+  grid-template: repeat(9, 1fr) / repeat(9, 1fr);
+}
+@media screen and (orientation: landscape) {
+  .grid {
+    width: 75vh;
+    height: 75vh;
+  }
+  div.numbers {
+    width: 75vh;
+  }
+}
+@media screen and (orientation: portrait) {
+  .grid {
+    width: 75vw;
+    height: 75vw;
+  }
+  div.numbers {
+    width: 75vw;
+  }
+}
+span.cell {
+  border: 1px solid #484848;
+  display: grid;
+  justify-items: center;
+  align-items: center;
+  user-select: none;
+}
+span.cell[empty="false"] {
+  background: #808080;
+}
+span.cell[empty="true"] {
+  background: #bdbdbd;
+}
+span.cell[selected] {
+  animation: 1s infinite bgflicker;
+}
+span.cell[col="2"], span.cell[col="5"] {
+  border-right-width: 3px;
+}
+span.cell[row="2"], span.cell[row="5"] {
+  border-bottom-width: 3px;
+}
+div.numbers {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  font-size: 200%;
+}
+div.numbers > span.cell {
+  border: none;
+}
+div.menu > div[hidden] {
+  display: none;
+}
+
+@keyframes bgflicker {
+  0% { background: #bdbdbd; }
+  50% { background: #bdbdbd4a; }
+  100% { background: #bdbdbd; }
+}

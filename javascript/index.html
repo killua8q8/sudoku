@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <title>Sudoku</title>
+    <link rel="stylesheet" href="./index.css">
+    <script src="./libs.js" charset="utf-8"></script>
+    <script src="./sudoku.js" charset="utf-8"></script>
+  </head>
+  <body>
+    <div class="root">
+      <div class="grid" game-state="S" tabindex="0"></div>
+      <div class="numbers">
+        <span class="cell" value="0">🆖</span>
+        <span class="cell" value="1">1️⃣</span>
+        <span class="cell" value="2">2️⃣</span>
+        <span class="cell" value="3">3️⃣</span>
+        <span class="cell" value="4">4️⃣</span>
+        <span class="cell" value="5">5️⃣</span>
+        <span class="cell" value="6">6️⃣</span>
+        <span class="cell" value="7">7️⃣</span>
+        <span class="cell" value="8">8️⃣</span>
+        <span class="cell" value="9">9️⃣</span>
+      </div>
+      <div class="menu">
+        <div game-state="S">
+          <button class="menu-item" value="1">New Game</button>
+        </div>
+        <div game-state="N" hidden>
+          <button class="menu-item" value="1">Beginner</button>
+          <button class="menu-item" value="3">Normal</button>
+          <button class="menu-item" value="5">Hard</button>
+        </div>
+        <div game-state="G" hidden>
+          <button class="menu-item" value="1">Verify</button>
+          <button class="menu-item" value="2">Solve For Me</button>
+          <button class="menu-item" value="3">New Game</button>
+        </div>
+        <div game-state="R" hidden>
+          <button class="menu-item" value="1">Stop</button>
+        </div>
+      </div>
+    </div>
+    <script type="text/javascript">
+      (() => {
+        let sudoku = new Sudoku(true);
+        let gridRenderWorker = undefined;
+        let gridSolverWorker = undefined;
+
+        const initGrid = () => {
+          const grid = document.querySelector('.grid');
+          grid.append(...[...Array(81).keys()].map(idx => {
+            let span = document.createElement('span');
+            span.classList.add('cell');
+            span.setAttribute('row', Math.floor(idx / 9));
+            span.setAttribute('col', idx % 9);
+            span.onclick = (e) => {
+              const state = document.querySelector('div.grid').getAttribute('game-state');
+              if (state === 'G' && e.currentTarget.getAttribute('empty') === 'true') {
+                deselectCell();
+                e.currentTarget.setAttribute('selected', '');
+              }
+            };
+            return span;
+          }));
+          document.querySelectorAll('div.numbers > span.cell').forEach(cell => {
+            cell.onclick = (e) => {
+              const state = document.querySelector('div.grid').getAttribute('game-state');
+              const selectedCell = document.querySelector('span.cell[selected]');
+              if (state === 'G' && selectedCell) {
+                const row = parseInt(selectedCell.getAttribute('row'));
+                const col = parseInt(selectedCell.getAttribute('col'));
+                const value = parseInt(e.currentTarget.getAttribute('value'));
+                sudoku.grid[row * 9 + col] = value;
+              }
+            };
+          });
+          document.querySelectorAll('button.menu-item').forEach(btn => {
+            btn.onclick = menuControl;
+          });
+          grid.addEventListener('keydown', (e) => {
+            const state = document.querySelector('div.grid').getAttribute('game-state');
+            const selectedCell = document.querySelector('span.cell[selected]');
+            if (state === 'G' && selectedCell && (e.keyCode === 27 || e.key.match(/\d/g))) {
+              const row = parseInt(selectedCell.getAttribute('row'));
+              const col = parseInt(selectedCell.getAttribute('col'));
+              const value = parseInt(e.keyCode === 27 ? 0 : e.key);
+              sudoku.grid[row * 9 + col] = value;
+            }
+          });
+        };
+        const showMenu = (state) => document.querySelector(`div[game-state="${state}"]:not(.grid)`).removeAttribute('hidden');
+        const hideMenu = (state) => document.querySelector(`div[game-state="${state}"]:not(.grid)`).setAttribute('hidden', '');
+        const transit = (from, to) => {
+          if (from) {
+            hideMenu(from) || showMenu(to);
+          } else {
+            document.querySelectorAll('div[game-state]:not(.grid):not([game-state="S"])').forEach(d => d.setAttribute('hidden', '')) || showMenu(to);
+          }
+          document.querySelector('div.grid').setAttribute('game-state', to);
+        };
+        const deselectCell = () => document.querySelector('span.cell[selected]') && document.querySelector('span.cell[selected]').removeAttribute('selected');
+
+        const menuControl = (e) => {
+          const state = e.currentTarget.parentElement.getAttribute('game-state');
+          const menuValue = e.currentTarget.value;
+          switch (state) {
+            case 'S':
+              if (menuValue === '1') {
+                transit(state, 'N');
+              }
+              break;
+            case 'N':
+              sudoku = new Sudoku();
+              gridRenderWorker.postMessage(sudoku.buffer);
+              sudoku.leveling(parseInt(menuValue));
+              document.querySelectorAll('div.grid > span.cell').forEach((cell) => cell.setAttribute('empty', !!!sudoku.getCellValue(parseInt(cell.attributes.row.value), parseInt(cell.attributes.col.value))));
+              transit(state, 'G');
+              break;
+            case 'G':
+              if (menuValue === '1') {
+                if (sudoku.solved) {
+                  alert('🎉🎉Yay! You solved the sudoku!🥳🥳');
+                  transit(state, 'S');
+                } else {
+                  alert('😱😱😱You may just miss a few, keep trying!');
+                }
+              } else if (menuValue === '2') {
+                if (!sudoku.solved) {
+                  document.querySelectorAll('span.cell[empty="true"]').forEach(cell => {
+                    const row = parseInt(cell.getAttribute('row'));
+                    const col = parseInt(cell.getAttribute('col'));
+                    sudoku.grid[row * 9 + col] = 0;
+                  });
+                  gridSolverWorker.postMessage(sudoku.buffer);
+                  transit(state, 'R');
+                }
+              } else if (menuValue === '3') {
+                transit(state, 'N');
+              }
+              deselectCell();
+              break;
+            case 'R':
+              if (menuValue === '1') {
+                gridSolverWorker.terminate();
+                gridSolverWorker = newGridSolverWorker(({ data: { done } }) => done && transit(null, 'S'));
+                transit(state, 'G');
+              }
+              break;
+            default:
+              // Do nothing
+          }
+        };
+
+        initGrid();
+        gridRenderWorker = newRenderWorker(({ data: { row, col, val } }) => {
+          if (sudoku.ready) {
+            document.querySelector(`span[row="${row}"][col="${col}"]`).innerHTML = digits[val];
+          } else {
+            document.querySelector(`span[row="${row}"][col="${col}"]`).innerHTML = digits[10];
+          }
+        });
+        gridSolverWorker = newGridSolverWorker(({ data: { done } }) => done && transit(null, 'S'));
+        gridRenderWorker.postMessage(sudoku.buffer);
+      })();
+    </script>
+  </body>
+</html>
